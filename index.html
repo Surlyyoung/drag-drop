@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+<!--
+  1.拖动图片到图片上，位置稍有误差
+  2.实现的图片的唯一性的方法不佳
+ -->
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>净水示意图</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" type="text/css" media="screen" href="./CSS/normalize.css" />
+  <link rel="stylesheet" type="text/css" media="screen" href="./CSS/index.css" />
+  <link rel="stylesheet" type="text/css" media="screen" href="./CSS/min.css" />
+  <link rel="stylesheet" type="text/css" media="screen" href="./CSS/iconfont.css" />
+</head>
+
+<body>
+  <div class="main_wrap">
+    <!-- 侧边栏 -->
+    <div class="tool fl">
+      <div class="side_bar">
+        <p class="tool_text">
+          <img class="tool_box" src="images/toolbox.png" alt="工具箱">
+          <span>工具箱</span>
+        </p>
+        <!-- 图片工具 -->
+      </div>
+      <div class="record record_wrap">
+        <p class="record_text">记录</p>
+        <!-- 示例 -->
+      </div>
+    </div>
+    <div id="capture" class="content_wrap fl">
+      <!-- 网格开关 -->
+      <div class="grid">
+        <div class="grid_wrap">
+          <span>网格</span>
+          <div id="grid_btn" class="button button_on">
+            <span class="cicle"></span>
+          </div>
+        </div>
+      </div>
+      <!-- 放置目标 与 网格 -->
+      <div class="droptarget">
+        <!-- 表格 -->
+        <div class="table">
+        </div>
+        <!-- 放置目标 -->
+      </div>
+      <div class="button_area">
+        <span class="btn btn_save">保存</span>
+        <span class="btn btn_cancle">取消</span>
+      </div>
+    </div>
+    <!-- <button id="download">下载</button> -->
+    <div class="mask"></div>
+  </div>
+  <!-- <script src="./js/bluebird.core.min.js"></script> -->
+  <!-- <script src="./js/html2canvas.min.js"></script> -->
+  <script src="./js/toolList.js"> </script>
+  <script src="./js/example.js"></script>
+  <script src="./js/index.js"></script>
+</body>
+<script>
+  /* 变量 */
+  var capture = document.querySelector('#capture'); // capture
+  var droptarget = document.querySelector('.droptarget'); //放置得目标区域
+  var side_bar = document.querySelector('.side_bar'); // 侧边栏
+  var record = document.querySelector('.record'); // 记录的盒子
+  var gridBtn = document.querySelector("#grid_btn"); //网格按钮
+  var table = document.querySelector('.table'); // 网格盒子
+  var saveBtn = document.querySelector('.btn_save'); // 保存按钮
+  var cancleBtn = document.querySelector('.btn_cancle'); //取消按钮
+
+  /* 拖动时鼠标与元素原点距离 */
+  var dx = 0,
+    dy = 0,
+    dragElWidth = 0, // 拖动图片的原始宽度
+    draElheight = 0; // 拖动图片的原始高度
+  var flag = false; //是否从sidebar 中的 含有tools_tool类名的盒子 拖出
+  var copy_src = '', // 图片的路径
+    copy_index = 0, //图片在原处的序号
+    copy_id = '', //图片的id
+    copy_alt = '', // 图片的alt
+    copy_title = '', //图片的标题
+    copy_line_flag = false, // 是否为线 
+    line_type = ''; // 横线或竖线的类名
+
+  var deleteFlag = false, //可删除标志
+    enterFlag = false, //可输入标志
+    deleteTarget = null, //删除的目标
+    inputTarget = null; // 输入的目标
+  var timer = null; // 延时对象
+
+  var stopFlag = false; // 停止移动标志
+  var target = null, // 移动的目标
+    originLeft = 0, // 原始 left
+    originTop = 0; // 原始 top
+  var originClientX = 0,
+    originClientY = 0; //原始clientX，clientY
+
+  var allExpData = []; //所有记录的数据
+
+  window.onload = function () {
+    allExpData = JSON.parse(sessionStorage.getItem('expData')) || []; // 所有的记录数据存在sessionStorage
+    initTools(toolLists); //初始化工具栏
+    initExpSpan(); //初始化记录
+    createExample(example); // 生成 默认模板例子
+    createGrid(); //生成表格
+  }
+
+  /* 数据 部分 */
+  saveBtn.addEventListener("click", saveExp);
+  cancleBtn.addEventListener('click', cancleExp);
+
+  /* 点击例子 */
+  record.addEventListener('click', toExp);
+
+  /* 拖动*/
+  document.addEventListener("dragstart", onDragStart);
+  document.addEventListener("drag", function (event) { //target 为 拖动的元素
+  });
+
+  // 当拖动进入目标时，触发dragenter
+  document.addEventListener("dragenter", function (event) {
+    if (event.target.className.indexOf('droptarget') != -1) {
+      event.target.style.backgroundColor = "#f5f5f5";
+    }
+  });
+  // 默认情况下,数据/元素不能在其他元素中被拖放。防止元素的默认处理
+  document.addEventListener("dragover", function (event) {
+    event.preventDefault();
+  });
+  // 当可拖放的元素离开droptarget，重置背景色
+  document.addEventListener("dragleave", function (event) {
+    if (event.target.className.indexOf('droptarget') != -1) {
+      event.target.style.backgroundColor = "";
+    }
+  });
+
+  /*对于drop,防止浏览器的默认处理数据(在drop中链接是默认打开)
+  利用dataTransfer.getData()方法获得拖放数据
+  拖拽元素附加到drop元素*/
+  document.addEventListener("drop", onDrop);
+  // 拖动完成后触发
+  document.addEventListener("dragend", function (event) { // 需要判断 是否成功放入指定元素
+    event.target.style.opacity = "1";
+  });
+
+
+  /* 点击 与 按键 部分*/
+  document.addEventListener('keydown', onKeyDown);
+  droptarget.addEventListener('click', droptargetClick);
+  droptarget.addEventListener('dblclick', droptargetDbClick);
+  side_bar.addEventListener('click', sideBarClick);
+  droptarget.addEventListener('mousedown', onMouseDown);
+
+  /* 
+   * 网格按钮点击事件
+   */
+  gridBtn.onclick = function (e) {
+    if (this.className.indexOf('button_on') == -1) {
+      this.className += ' button_on';
+      table.style.display = 'block';
+    } else {
+      this.className = 'button';
+      table.style.display = 'none';
+    }
+  }
+
+  
+</script>
+
+</html>
